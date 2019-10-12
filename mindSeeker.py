@@ -12,7 +12,7 @@ import socket
 import threading
 import time
 import shutil
-from netaddr import *
+from ipaddress import ip_network
 import signal
 
 #Global Constants
@@ -210,11 +210,7 @@ def main():
         args.ipAddress = socket.gethostbyname(args.dns)
 
     #Ip data object contains all the ip address data
-    ipData = IPNetwork(args.ipAddress)
-
-    #If there is a CIDR range. We remove the first ip address as it is invalid broadcast IP.
-    if("/" in args.ipAddress):
-        ipData = list(ipData[1:])
+    ipData = ip_network(args.ipAddress)
 
     #Yea this stuff isnt gonna be worked on for awhile...get over it
     #Manages and Creates file structure for the program output to use
@@ -228,9 +224,10 @@ def main():
     else:
         resume()
 
-    #If a Cidr range is used. Removes the first IP address which is invalid. 
-    for i in range(len(ipData)):
-        thread = threading.Thread(name=str(ipData[i]), target=enumHost,args=(str(ipData[i]),))
+    # Loop over valid addresses, map will convert them to strings for us.
+    # we could also used [str(host) for host in ipData.hosts()]
+    for host in map(str, ipData.hosts()):
+        thread = threading.Thread(name=host, target=enumHost, args=(host,))
         threads.append(thread)
         #Handles the creation of values within our dictionarty for printing
     
@@ -244,27 +241,29 @@ def main():
     while(threading.active_count() > 1):
         offlineHosts = 0
         printedLines = 0
-        for i in range(len(threadStateDictionary)):
+        # We grab the names and states from the threadStateDict
+        for threadName, threadState in threadStateDictionary.items():
             #If a host is marked as not online we incremement the offline hosts counter. 
-            if(threadStateDictionary[threads[i].name].strip() == "Host is not online"):
+            if(threadState.strip() == "Host is not online"):
                 offlineHosts = offlineHosts + 1
             else:
-                #Work on the redundancy of these lines
-                if(threadStateDictionary[threads[i].name].strip() == "Running Syn Scan"):
-                    print("\033[32;4m"+threads[i].name + "\033[0m:\033[33;5m " + threadStateDictionary[threads[i].name] + "\033[0m" + " "*10)
-                    printedLines=printedLines + 1
-                elif(threadStateDictionary[threads[i].name].strip() == "Running Connect Scan"):
-                    print("\033[32;4m"+threads[i].name + "\033[0m:\033[35;5m " + threadStateDictionary[threads[i].name] + "\033[0m" + " "*10)
-                    printedLines=printedLines + 1
-                elif(threadStateDictionary[threads[i].name].strip() == "Running Fingerprinting Scan"):
-                    print("\033[32;4m"+threads[i].name + "\033[0m:\033[31;5m " + threadStateDictionary[threads[i].name] + "\033[0m" + " "*10)
-                    printedLines=printedLines + 1
-                elif(threadStateDictionary[threads[i].name].strip() == "Finished with Evaluation."):
-                    print("\033[32;4m"+threads[i].name + "\033[0m:\033[34;4m " + threadStateDictionary[threads[i].name] + "\033[0m" + " "*10)
-                    printedLines=printedLines + 1
-                else:
-                    print("\033[32;4m"+threads[i].name + "\033[0m: " + threadStateDictionary[threads[i].name] + " "*10)
-                    printedLines=printedLines + 1
+                stateColor = ''
+                endPadding = ' ' * 10
+                # Depending on your perfrences this could be turned into a dict
+                if(threadState == "Running Syn Scan"):
+                    stateColor = "\033[33;5m"
+                elif(threadState == "Running Connect Scan"):
+                    stateColor = "\033[35;5m"
+                elif(threadState == "Running Fingerprinting Scan"):
+                    stateColor = "\033[31;5m"
+                elif(threadState == "Finished with Evaluation."):
+                    stateColor = "\033[34;4m"
+                # using **locals() will allow us to pore the local namespace
+                # dict into this string al'a fStrings in python 3.6 or grater
+                # but because IDK what version this will be running on we use
+                # this hack.
+                print("\033[32;4m{threadName}\033[0m:{stateColor} {threadState}\033[0m{endPadding}".format(**locals()))
+                printedLines += 1
             #print(threads[i].name + " " + threadStateDictionary[threads[i].name])
                     
 
